@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/src/opendnp3/cpp/examples/master/build",
+  "command": "/bin/c++    -g   -o CMakeFiles/master-demo.dir/main.o -c /src/opendnp3/cpp/examples/master/main.cpp",
+  "file": "/src/opendnp3/cpp/examples/master/main.cpp"
+}
+]

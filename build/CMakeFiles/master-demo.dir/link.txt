@@ -1,0 +1,1 @@
+/bin/c++  -g  -rdynamic CMakeFiles/master-demo.dir/main.o  -o master-demo  -lopendnp3 
