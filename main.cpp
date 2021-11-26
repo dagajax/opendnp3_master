@@ -18,6 +18,9 @@
  * limitations under the License.
  */
 
+#include <unordered_map>
+#include <string>
+#include <stdlib.h>
 #include <opendnp3/ConsoleLogger.h>
 #include <opendnp3/DNP3Manager.h>
 #include <opendnp3/channel/PrintingChannelListener.h>
@@ -30,96 +33,224 @@
 #include "lib/include/rapidjson/writer.h"
 #include "lib/include/rapidjson/stringbuffer.h"
 #include "lib/include/rapidjson/pointer.h"
-#include <iostream>
-#include <vector>
+#include "lib/include/rapidjson/plugin_api.h"
 
 using namespace std;
 using namespace opendnp3;
 using namespace rapidjson;
 
-#define DNP3_MAP	QUOTE({					    \
-		"values" : [					        \
-			    {  					            \
-				"name"        : "temperature",	\
-				"out-station" : 1,		        \
-				"assetName"   : "Booth1",	    \
-				"register"    : 0,		        \
-				"scale"       : 0.1,	        \
-				"offset"      : 0.0	        	\
-			    },					            \
-			    { 					            \
-				"name"      : "humidity",	    \
-				"register"  : 1			        \
-		       	    }					        \
-			  ]					                \
-		})
-
-#define CONTROL_MAP	QUOTE({					    \
-		"values" : [					        \
-			      ]					            \
+#define DNP3_MAP	QUOTE({					            \
+		"values" : [					                \
+			    {  					                    \
+				    "name"          : "temperature",	\
+				    "out-station"   : 1,		        \
+				    "assetName"     : "Booth1",	        \
+				    "register"      : 102,		        \
+				    "scale"         : 0.1,	            \
+				    "offset"        : 0.0	        	\
+			    },					                    \
+			    { 					                    \
+				    "name"          : "humidity",	    \
+				    "register"      : 109,   	        \
+                    "scale"         : 0.1,	            \
+				    "offset"        : 0.0	        	\
+		       	}					                    \
+			  ]					                        \
 		})
 
 class TestSOEHandler : public ISOEHandler
 {
-    virtual void BeginFragment(const ResponseInfo& info){};
-    virtual void EndFragment(const ResponseInfo& info){};
+    public: 
+        TestSOEHandler() {
+            string def_cfg = QUOTE({
+                "plugin" : {
+                    "description" : "Modbus TCP and RTU C south plugin",
+                    "type" : "string",
+                    "default" : "ModbusC",
+                    "readonly": "true"
+                    },
+                "asset" : {
+                    "description" : "Default asset name",
+                    "type" : "string",
+                    "default" : "modbus", 
+                    "order": "1",
+                    "displayName": "Asset Name",
+                    "mandatory": "true"
+                    }, 
+                "protocol" : {
+                    "description" : "Protocol",
+                    "type" : "enumeration",
+                    "default" : "RTU", 
+                    "options" : [ "RTU", "TCP"], 
+                    "order": "2",
+                    "displayName": "Protocol"
+                    }, 
+                "address" : {
+                    "description" : "Address of Modbus TCP server", 
+                    "type" : "string",
+                    "default" : "127.0.0.1", 
+                    "order": "3",
+                    "displayName": "Server Address",
+                    "validity": "protocol == \"TCP\""
+                    },
+                "port" : {
+                    "description" : "Port of Modbus TCP server", 
+                    "type" : "integer",
+                    "default" : "2222", 
+                    "order": "4",
+                    "displayName": "Port",
+                    "validity" : "protocol == \"TCP\""
+                    },
+                "device" : {
+                    "description" : "Device for Modbus RTU",
+                    "type" : "string",
+                    "default" : "",
+                    "order": "5",
+                    "displayName": "Device",
+                    "validity" : "protocol == \"RTU\""
+                    },
+                "baud" : {
+                    "description" : "Baud rate  of Modbus RTU",
+                    "type" : "integer",
+                    "default" : "9600",
+                    "order": "6",
+                    "displayName": "Baud Rate",
+                    "validity" : "protocol == \"RTU\""
+                    },
+                "bits" : {
+                    "description" : "Number of data bits for Modbus RTU",
+                    "type" : "integer",
+                    "default" : "8",
+                    "order": "7",
+                    "displayName": "Number Of Data Bits",
+                    "validity" : "protocol == \"RTU\""
+                    },
+                "stopbits" : {
+                    "description" : "Number of stop bits for Modbus RTU",
+                    "type" : "integer",
+                    "default" : "1",
+                    "order": "8",
+                    "displayName": "Number Of Stop Bits",
+                    "validity" : "protocol == \"RTU\""
+                    },
+                "parity" : {
+                    "description" : "Parity to use",
+                    "type" : "enumeration",
+                    "default" : "none",
+                    "options" : [ "none", "odd", "even" ],
+                    "order": "9",
+                    "displayName": "Parity",
+                    "validity" : "protocol == \"RTU\""
+                    },
+                "slave" : {
+                    "description" : "The Modbus device default slave ID",
+                    "type" : "integer",
+                    "default" : "1",
+                    "order": "10",
+                    "displayName": "Slave ID"
+                    },
+                "map" : {
+                    "description" : "Modbus register map",
+                    "order": "11",
+                    "displayName": "Register Map", 
+                    "type" : "JSON",
+                    "default" : DNP3_MAP
+                    },
+                "timeout" : {
+                    "description" : "Modbus request timeout",
+                    "type" : "float",
+                    "default" : "0.5",
+                    "order": "12",
+                    "displayName": "Timeout",
+                    "validity" : "protocol == \"TCP\""
+                    },
+                "control" : {
+                    "description" : "Modbus request timeout",
+                    "type" : "enumeration",
+                    "default" : "None",
+                    "order": "13",
+                    "options" : [ "None", "Use Register Map", "Use Control Map" ],
+                    "displayName": "Control"
+                    }
+                });
 
-    virtual void Process(const HeaderInfo& info, const ICollection<Indexed<Binary>>& values) {};
-    virtual void Process(const HeaderInfo& info, const ICollection<Indexed<DoubleBitBinary>>& values) {};
-    virtual void Process(const HeaderInfo& info, const ICollection<Indexed<Analog>>& values) {
-        auto print = [](const Indexed<Analog>& pair) {
-            double v = pair.value.value;
-            std::cout << "[" << pair.index << "] : " << to_string(pair.value.value) << std::endl;
-
-            // Trying out RapidJSON functionality 
-            //const char json[] = " { \"hello\" : \"world\", \"t\" : true , \"f\" : false, \"n\": null, \"i\":123, \"pi\": 3.1416, \"a\":[1, 2, 3, 4] }";
-            //printf("Orginal JSON:\n %s\n", json);
-
-            // Document document;
-            // document.Parse(json);
-
-            // assert(document.IsObject());
-
-            // assert(document.HasMember("hello"));
-            // assert(document["hello"].IsString());
-            // printf("hello = %s\n", document["hello"].GetString());
-            
-            const char json[] = " { \"asset\" : \"transformer 1\", \"readings\" : [{\"name1\" : \"temperature\", \"tag type\" : \"analog\", \"offset\" : 0}, {\"name\" : \"voltage\", \"tag type\" : \"analog\", \"offset\" : 3} ]}";            
-            printf("Incoming JSON stream:\n %s\n", json);
-
+            std::unordered_map<std::string, int> readings_name_and_register;
             Document document;
-            document.Parse(json);
 
-            assert(document.IsObject());
-            assert(document["asset"].IsString());            
-            printf("asset = %s\n", document["asset"].GetString());
-
-            std::vector<std::string> sName;
-            rapidjson::Value& readings = document["readings"];
-            assert(readings.IsArray());
-            for(rapidjson::SizeType i=0; i <readings.Size(); i++) {
-                sName.emplace_back(readings[i]["name1"].GetString());
+            if (document.Parse(def_cfg.c_str()).HasParseError()){
+                cout << "Parse Error" << endl;
+                //return 1;
             }
+
+            auto map = document["map"].GetObject();
+            assert(map.HasMember("default"));
+
+            auto default_string = map["default"].GetString();
+            cout << default_string  << endl;
+            Document d2;
+            if(d2.Parse(default_string).HasParseError()){
+                cout << "Parse error in default" << endl;
+                //return 2;
+            }
+
+            auto values = d2["values"].GetArray();
             
-            
+            // cycle through values and build hasmap of reading name and register
+            for (auto& m : values){
+                auto reading_name = m["name"].GetString();
+                auto register_num = m["register"].GetInt();
+                readings_name_and_register[reading_name] = register_num;
+            }
+
+            for (auto& tup : readings_name_and_register)
+            {
+                cout << tup.first << " : " << tup.second << endl;
+            }
+
+            auto value1 = d2["values"][0].GetObj();
+            auto name = value1["name"].GetString();
+                    cout << "SOE Handler Created" << endl;
+        }
+    private: 
+
+        virtual void BeginFragment(const ResponseInfo& info){};
+        virtual void EndFragment(const ResponseInfo& info){};
+
+        virtual void Process(const HeaderInfo& info, const ICollection<Indexed<Binary>>& values) {};
+        virtual void Process(const HeaderInfo& info, const ICollection<Indexed<DoubleBitBinary>>& values) {};
+        virtual void Process(const HeaderInfo& info, const ICollection<Indexed<Analog>>& values) {
+            auto print = [](const Indexed<Analog>& pair) {
+                double v = pair.value.value;
+                //std::cout << "[" << pair.index << "] : " << to_string(pair.value.value) << std::endl;
+                if (pair.index == 3) {
+                    cout << "[" << pair.index << "] : " << to_string(pair.value.value) << std::endl;
+                }
+                else {
+                    std::cout << "[" << pair.index << "] : " << "Not printed" << std::endl; 
+                }
+            };
 
             
-            
+            values.ForeachItem(print); 
+            //cout << "Values at position 3 " << pair.value.value << endl;
+            cout << "Count : " << values.Count() << endl;
 
+            
+            //Indexed<Analog>& new_index = [];
+            //Indexed<Analog>& new_val = values.ReadOnlyValue();
+            //cout << "Value [3] = " << values.value[0].value[3] << endl;
             
         };
-        values.ForeachItem(print);
         
-    };
-    virtual void Process(const HeaderInfo& info, const ICollection<Indexed<Counter>>& values) {};
-    virtual void Process(const HeaderInfo& info, const ICollection<Indexed<FrozenCounter>>& values) {};
-    virtual void Process(const HeaderInfo& info, const ICollection<Indexed<BinaryOutputStatus>>& values) {};
-    virtual void Process(const HeaderInfo& info, const ICollection<Indexed<AnalogOutputStatus>>& values) {};
-    virtual void Process(const HeaderInfo& info, const ICollection<Indexed<OctetString>>& values) {};
-    virtual void Process(const HeaderInfo& info, const ICollection<Indexed<TimeAndInterval>>& values) {};
-    virtual void Process(const HeaderInfo& info, const ICollection<Indexed<BinaryCommandEvent>>& values) {};
-    virtual void Process(const HeaderInfo& info, const ICollection<Indexed<AnalogCommandEvent>>& values) {};    
-    virtual void Process(const HeaderInfo& info, const ICollection<DNPTime>& values) {};
+        virtual void Process(const HeaderInfo& info, const ICollection<Indexed<Counter>>& values) {};
+        virtual void Process(const HeaderInfo& info, const ICollection<Indexed<FrozenCounter>>& values) {};
+        virtual void Process(const HeaderInfo& info, const ICollection<Indexed<BinaryOutputStatus>>& values) {};
+        virtual void Process(const HeaderInfo& info, const ICollection<Indexed<AnalogOutputStatus>>& values) {};
+        virtual void Process(const HeaderInfo& info, const ICollection<Indexed<OctetString>>& values) {};
+        virtual void Process(const HeaderInfo& info, const ICollection<Indexed<TimeAndInterval>>& values) {};
+        virtual void Process(const HeaderInfo& info, const ICollection<Indexed<BinaryCommandEvent>>& values) {};
+        virtual void Process(const HeaderInfo& info, const ICollection<Indexed<AnalogCommandEvent>>& values) {};    
+        virtual void Process(const HeaderInfo& info, const ICollection<DNPTime>& values) {};
 };
 
 int main(int argc, char* argv[])
@@ -171,6 +302,7 @@ int main(int argc, char* argv[])
 
     bool channelCommsLoggingEnabled = true;
     bool masterCommsLoggingEnabled = true;
+
 
     while (true)
     {
